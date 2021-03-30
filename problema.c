@@ -1,43 +1,38 @@
-#include <stdio.h>
-#include <pthread.h>
-#include <stdlib.h>
-#include <time.h>
-#include <pthread.h>
-#include <unistd.h>
+#include "./problema.h"
 
-#define MAX 100
-
-typedef struct produto
-{
-    int id;
-    //info produto
-} Produto;
 
 //As variaveis sao globais
 Produto* produtos[MAX] = {NULL};
 //
 
-int entrada = 0; // Variavel que demarca o local a ser inserido
-int saida = 0; // Vatiavel que demarca o local a ser removido
-
-int Vazio = MAX;
-int Cheio = 0;
-
-Produto *criaProduto(/*info produto*/);
-int removeProduto(); // retorna id do produto
-void* produtor();
-void* consumidor();
+int topo = 0;
+int mutex = PPRODUZIR;
 
 void* exibir(){
     sleep(1);
 
     while (1){
-        system("tput reset");
+        // system("tput reset");
 
-        printf("Produtos: %d\n",Cheio);
-        printf("Espaços: %d\n",Vazio);
+        printf("Produtos: %d\n",topo);
+        printf("Espaços: %d\n",MAX - topo);
 
         printf("\n");
+
+        FILE *arq = fopen("resultados.txt", "w+");
+        int i;
+        for (i = 0; i < MAX; i++)
+        {
+            if (produtos[i] != NULL)
+            {
+                fwrite("Válido!\n", 1, sizeof("Válido!\n"), arq);
+            }
+            else
+            {
+                fwrite("NULL!\n", 1, sizeof("NULL!\n"), arq);
+            }
+        }
+        fclose(arq);
 
         sleep(1);
     }   
@@ -51,22 +46,32 @@ void* produtor(){
         int quant_produtos = rand() % 5;
         
         int i;
+        if (mutex == PPRODUZIR)
+        {
+            for(i = 0; i < quant_produtos; i++){
+                // while(Vazio == 0);                
+                if (topo < MAX-1)
+                {           
+                    if (produtos[topo] == NULL)
+                    {
+                        printf("Topo (Produtor): %d\n", topo);
 
-        for(i = 0; i < quant_produtos; i++){
-            while(Vazio == 0);                
+                        Produto *produto = criaProduto();
+                        //Inserir item
+                        //Vai ter que ser uma função
+                        produtos[topo] = produto;
 
-            Produto *produto = criaProduto();
-            //Inserir item
-            //Vai ter que ser uma função
-
-            produtos[entrada] = produto;
-
-            entrada = (entrada + 1) % MAX;
-
-            Cheio += 1;
-            Vazio -= 1;
-
+                        topo = (topo + 1) % MAX;
+                    }
+                    else {
+                        printf("Erro! Bloco de Memória Cheio!\n");
+                        // exit(1);
+                    }
+                }
+            }
+            mutex = CONSUMIR;
         }
+        printf("\n");
 
         sleep(1);
     }
@@ -81,19 +86,34 @@ void* consumidor(){
         int quant_produtos = rand() % 5;
 
         int i;
-
-        for( i = 0; i < quant_produtos ; i++){
-            while(Cheio == 0);
         
-            int id_produto;
+        if (mutex == CONSUMIR)
+        {
+            for( i = 0; i < quant_produtos ; i++){
+                // while(Cheio == 0);
+                if (topo)
+                {
+                    if (produtos[topo-1] != NULL)
+                    {
+                        printf("Topo (Consumidor): %d\n", topo-1);
 
-            id_produto = removeProduto();
+                        int id_produto;
 
-            saida = (saida + 1) % MAX;
+                        id_produto = removeProduto();
 
-            Cheio -= 1;
-            Vazio += 1;
-        }        
+                        topo = (topo - 1) % MAX;
+                    }
+                    else 
+                    {
+                        printf("Erro! Produto inexistente.\n");
+                        printf("Topo (Consumidor): %d\n", topo);
+                        exit(1);
+                    }
+                }
+            }
+            mutex = PPRODUZIR;
+        }
+        printf("\n");
 
         sleep(1);
     }
@@ -131,11 +151,11 @@ Produto *criaProduto(){
 
 int removeProduto(){
 
-    int id_produto = produtos[saida]->id;
+    int id_produto = produtos[topo-1]->id;
 
-    free(produtos[saida]);
+    free(produtos[topo-1]);
 
-    produtos[saida] = NULL;
+    produtos[topo-1] = NULL;
 
     return id_produto;
 }
