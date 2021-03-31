@@ -2,20 +2,46 @@
 
 
 //As variaveis sao globais
-Produto* produtos[MAX] = {NULL};
-//
+static Buffer b;
+
+static sem_t exclusao;
+static sem_t slot_vazio; // 
+static sem_t slot_cheio;
 
 int topo = 0;
-int mutex = PPRODUZIR;
+//
+int bufferCount(const Buffer b)
+{
+    int count;
+
+    count = b.in - b.out;
+    if (count < 0)
+        count += MAX;
+    return count;
+}
+bool isValid(int type, const Buffer b)
+{
+    if (type == PPRODUZIR)
+    {
+        if(bufferCount(b) > MAX-1) return false;
+        else return true;
+    }
+    else if (type == CONSUMIR)
+    {
+        if(bufferCount(b) > 0) return true;
+        else return false;
+    }
+}
 
 void* exibir(){
     sleep(1);
 
     while (1){
-        // system("tput reset");
+        //system("tput reset");
 
-        printf("Produtos: %d\n",topo);
-        printf("Espaços: %d\n",MAX - topo);
+        int count = bufferCount(b);
+        printf("Produtos: %d\n", count);
+        printf("Espaços: %d\n",MAX - count);
 
         printf("\n");
 
@@ -23,7 +49,7 @@ void* exibir(){
         int i;
         for (i = 0; i < MAX; i++)
         {
-            if (produtos[i] != NULL)
+            if (b.produtos[i] != NULL)
             {
                 fwrite("Válido!\n", 1, sizeof("Válido!\n"), arq);
             }
@@ -35,7 +61,7 @@ void* exibir(){
         fclose(arq);
 
         sleep(1);
-    }   
+    }
 }
 
 void* produtor(){
@@ -46,30 +72,31 @@ void* produtor(){
         int quant_produtos = rand() % 5;
         
         int i;
-        if (mutex == PPRODUZIR)
-        {
-            for(i = 0; i < quant_produtos; i++){
-                // while(Vazio == 0);                
-                if (topo < MAX-1)
-                {           
-                    if (produtos[topo] == NULL)
-                    {
-                        printf("Topo (Produtor): %d\n", topo);
+        for(i = 0; i < quant_produtos; i++){
+            // while(Vazio == 0);                
+            if (isValid(PPRODUZIR, b))
+            {           
+                if (b.produtos[b.in] == NULL)
+                {
+                    sem_wait(&slot_vazio);
+                    sem_wait(&exclusao);
+                    printf("Produtor: %d\n", b.in);
 
-                        Produto *produto = criaProduto();
-                        //Inserir item
-                        //Vai ter que ser uma função
-                        produtos[topo] = produto;
+                    Produto *produto = criaProduto();
+                    //Inserir item
+                    //Vai ter que ser uma função
+                    b.produtos[b.in] = produto;
 
-                        topo = (topo + 1) % MAX;
-                    }
-                    else {
-                        printf("Erro! Bloco de Memória Cheio!\n");
-                        // exit(1);
-                    }
+                    b.in = (b.in + 1) % MAX;
+
+                    sem_post(&exclusao);
+                    sem_post(&slot_cheio);
+                }
+                else {
+                    printf("Erro! Bloco de Memória Cheio!\n");
+                    // exit(1);
                 }
             }
-            mutex = CONSUMIR;
         }
         printf("\n");
 
@@ -86,32 +113,33 @@ void* consumidor(){
         int quant_produtos = rand() % 5;
 
         int i;
-        
-        if (mutex == CONSUMIR)
-        {
-            for( i = 0; i < quant_produtos ; i++){
-                // while(Cheio == 0);
-                if (topo)
+
+
+        for( i = 0; i < quant_produtos ; i++){
+            // while(Cheio == 0);
+            if (isValid(CONSUMIR, b))
+            {
+                if (b.produtos[b.out] != NULL)
                 {
-                    if (produtos[topo-1] != NULL)
-                    {
-                        printf("Topo (Consumidor): %d\n", topo-1);
+                    sem_wait(&slot_cheio);
+                    sem_wait(&exclusao);
+                    printf("Consumidor: %d\n", b.out);
 
-                        int id_produto;
+                    int id_produto;
 
-                        id_produto = removeProduto();
+                    id_produto = removeProduto();
 
-                        topo = (topo - 1) % MAX;
-                    }
-                    else 
-                    {
-                        printf("Erro! Produto inexistente.\n");
-                        printf("Topo (Consumidor): %d\n", topo);
-                        exit(1);
-                    }
+                    b.out = (b.out + 1) % MAX;
+                    sem_post(&exclusao);
+                    sem_post(&slot_vazio);
+                }
+                else 
+                {
+                    printf("Erro! Produto inexistente.\n");
+                    printf("Topo (Consumidor): %d\n", topo);
+                    exit(1);
                 }
             }
-            mutex = PPRODUZIR;
         }
         printf("\n");
 
@@ -121,7 +149,14 @@ void* consumidor(){
 }
 
 int main(){
+    b.in = 0;
+    b.out = b.in;
+
     srand(time(NULL));
+
+    sem_init(&exclusao,0,1);
+    sem_init(&slot_vazio, 0, MAX-1);
+    sem_init(&slot_cheio, 0, 0);
 
     pthread_t newthread[3];
 
@@ -133,6 +168,10 @@ int main(){
 
     pthread_join(newthread[0],NULL);
     pthread_join(newthread[1],NULL);
+
+    sem_destroy(&exclusao);
+    sem_destroy(&slot_vazio);
+    sem_destroy(&slot_cheio);
 
     return 0;
 }
@@ -151,11 +190,11 @@ Produto *criaProduto(){
 
 int removeProduto(){
 
-    int id_produto = produtos[topo-1]->id;
+    int id_produto = b.produtos[b.out]->id;
 
-    free(produtos[topo-1]);
+    free(b.produtos[b.out]);
 
-    produtos[topo-1] = NULL;
+    b.produtos[b.out] = NULL;
 
     return id_produto;
 }
