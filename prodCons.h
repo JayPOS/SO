@@ -8,7 +8,7 @@
 #include <semaphore.h>
 
 
-#define MAX 100
+#define MAX 20
 #define PPRODUZIR 0
 #define CONSUMIR 1
 
