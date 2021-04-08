@@ -6,11 +6,14 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <semaphore.h>
+#include <ncurses.h>
 
 
 #define MAX 20
 #define PPRODUZIR 0
 #define CONSUMIR 1
+#define OCCUPED 1
+#define FREE 2
 
 typedef struct produto
 {

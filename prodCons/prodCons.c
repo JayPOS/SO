@@ -13,21 +13,27 @@ int option; // Excucao aleatoria ou nao
 int consumir; // Quantidade de produtos a ser consumido
 int produzir; // Quantidade de produtos a ser produzido
 
+WINDOW *win;
+WINDOW *subwindow;
+
 //Abstracao da "interface"
 void* exibir(){
 
     while (1){
+        wclear(subwindow);
         sleep(1);  
 
         sem_wait(&atualizacao);
 
-        system("tput reset");
+        // system("tput reset");
 
         int count;
         sem_getvalue(&cheio, &count);
         
+        //clear window
+        wclear(win);
 
-        printf("\n");
+        wprintw(win, "\n");
 
         //FILE *arq = fopen("resultados.txt", "w+");
         int i;
@@ -35,25 +41,46 @@ void* exibir(){
         {
             if (b.produtos[i] != NULL)
             {
-                printf("x");
+                wprintw(win, " ");
+                wattron(win, COLOR_PAIR(OCCUPED));
+                wprintw(win, " ");
+                wattroff(win, COLOR_PAIR(OCCUPED));
+                wprintw(win, " ");
                 //fwrite("Válido!\n", 1, sizeof("Válido!\n"), arq);
             }
             else
             {
-                printf("-");
+                wprintw(win, " ");
+                wattron(win, COLOR_PAIR(FREE));
+                wprintw(win, " ");
+                wattroff(win, COLOR_PAIR(FREE));
+                wprintw(win, " ");
                 //fwrite("NULL!\n", 1, sizeof("NULL!\n"), arq);
             }
         }
         //fclose(arq);
 
-        printf("\n\nProdutos: %d\n", count);
-        printf("Espaços: %d\n\n",MAX - count);              
+        int xMax, yMax, xMin, yMin;
+        getbegyx(subwindow, yMin, xMin);
+        getmaxyx(subwindow, yMax, xMax);
+
+        int xMid, yMid;
+        xMid = abs((xMax - xMid)/2);
+        yMid = abs((yMax - yMin)/2);
+
+        box(subwindow, 0, 0);
+        mvwprintw(subwindow,1,7, "Produtos: %d", count);
+        mvwprintw(subwindow,2,7, "Espaços: %d",MAX - count);
+        mvwprintw(subwindow,3,7, "Produzindo: %d", produzir);
+        mvwprintw(subwindow,4,7, "Consumindo: %d", consumir);
+        wrefresh(win);
+        wrefresh(subwindow);
     }
 }
 
 //Abstracao do produtor
 void* produtor(){
-    printf("Inicializando produtor\n");
+    // printw("Inicializando produtor\n");
 
     while(1){
         sleep(1);
@@ -65,7 +92,7 @@ void* produtor(){
             
             sem_wait(&vazio);
             sem_wait(&exclusao);
-            // printf("Produtor: %d\n", b.in);
+            // printw("Produtor: %d\n", b.in);
 
             Produto *produto = criaProduto();
             //Inserir item
@@ -77,13 +104,13 @@ void* produtor(){
             sem_post(&cheio);
             sem_post(&atualizacao);   
         }
-        printf("\n");        
+    //     printw("\n");        
     }
 }
 
 //Abstracao do consumidor
 void* consumidor(){
-    printf("Inicializando Consumidor\n");
+    // printw("Inicializando Consumidor\n");
 
     while(1){
         sleep(1);
@@ -97,7 +124,7 @@ void* consumidor(){
 
             sem_wait(&cheio);
             sem_wait(&exclusao);
-            // printf("Consumidor: %d\n", b.out);
+            // printw("Consumidor: %d\n", b.out);
 
             int id_produto;
 
@@ -108,7 +135,7 @@ void* consumidor(){
             sem_post(&vazio);   
             sem_post(&atualizacao);
         }
-        printf("\n");        
+        // printw("\n");        
     }
     
 }
@@ -130,7 +157,26 @@ int main(int argc, char** argv){
         consumir = atoi(argv[3]);
     }
 
-    // printf("%d, %d", produzir, consumir);
+    // printw("%d, %d", produzir, consumir);
+    initscr();
+    win = newwin(100, 100, 0, 0);
+    subwindow = newwin(6,26,5,15);
+
+    if (!has_colors)
+    {
+        wprintw(win, "Terminal dont have colors!\n");
+        return -1;
+    }
+    else
+    {
+        start_color();
+    }
+
+    // colors:
+    init_pair(FREE, COLOR_WHITE, COLOR_BLUE);
+    init_pair(OCCUPED, COLOR_WHITE, COLOR_RED);
+
+    // wbkgd(win, COLOR_PAIR(1));
 
     //Inicializando semáforos
     sem_init(&exclusao,0,1);
@@ -151,7 +197,7 @@ int main(int argc, char** argv){
     sem_destroy(&exclusao);
     sem_destroy(&vazio);
     sem_destroy(&cheio);
-
+    endwin();
     return 0;
 }
 
